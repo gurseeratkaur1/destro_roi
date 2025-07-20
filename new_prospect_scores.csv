@@ -1,0 +1,5 @@
+user_id,primary_lead_quality,engagement_score,conversion_probability,predicted_conversion,priority
+prospect_001,hot,3.2,0.28,0,Low
+prospect_002,warm,2.1,0.28,0,Low
+prospect_003,cold,1.5,0.53,1,Medium
+prospect_004,hot,3.8,0.31,0,Medium
