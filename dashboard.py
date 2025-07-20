@@ -104,6 +104,10 @@ st.write("Use this table to prioritize leads. Sort by 'conversion_probability' t
 # Display the filterable and sortable lead scoring table (Corrected)
 # Removed 'primary_location' from this list as it's not in the source file
 display_cols = ['user_id', 'lead_score', 'conversion_probability', 'primary_lead_quality', 'engagement_score']
+# Add the new column only if it exists in the DataFrame
+if 'primary_interaction_day' in leads_df.columns:
+    display_cols.append('primary_interaction_day')
+
 st.dataframe(leads_df[display_cols])
 
 # --- Add this new section to dashboard.py ---
@@ -139,7 +143,7 @@ st.header("🔮 'What-If' Scenario Planner")
 st.write("Adjust the sliders and dropdowns to see how these key factors impact the probability of conversion in real-time.")
 
 # Load the model and print a status message
-model, encoders = load_model()
+# model, encoders = load_model()
 
 if model is None or encoders is None:
     st.error("Could not find saved model files (`.pkl`). Please run the training script first.")
@@ -157,11 +161,15 @@ else:
 
     with col3:
         interaction_variety = st.slider("Interaction Variety (e.g., number of unique touchpoints)", 1, 10, 3)
+        day_options = {"Weekday": 0, "Weekend": 5}
+        selected_day = st.selectbox("Primary Interaction Day", options=list(day_options.keys()))
         primary_location = st.selectbox("Primary Location", encoders['primary_location'].classes_)
 
     # When the button is clicked, assemble the data and make a prediction
     if st.button("Predict Conversion Probability"):
         
+        interaction_day_value = day_options[selected_day]
+
         # The model needs all 20 features to make a prediction.
         # We'll use your inputs for the key features and fill the rest with typical values.
         feature_dict = {
@@ -172,7 +180,8 @@ else:
             'primary_location': [primary_location], 'engagement_score': [engagement_score],
             'interaction_span_days': [2], 'email_consent': [True], 'sms_consent': [False],
             'data_tracking_consent': [True], 'still_consented': [True],
-            'total_communications': [2], 'total_responses': [1], 'response_rate': [0.5]
+            'total_communications': [2], 'total_responses': [1], 'response_rate': [0.5],
+            'primary_interaction_day': [interaction_day_value]
         }
         
         # Create a DataFrame and encode the categorical features

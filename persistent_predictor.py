@@ -4,7 +4,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import GridSearchCV
 from datetime import datetime
+import xgboost as xgb
 import joblib
 import os
 import json
@@ -51,12 +53,14 @@ class PersistentConversionPredictor:
         return user_features
 
     def _aggregate_user_interactions(self, interactions_df):
+        interactions_df['day_of_week'] = interactions_df['timestamp'].dt.dayofweek
         """Aggregate interaction data by user"""
         user_agg = interactions_df.groupby('user_id').agg({
             'interaction_type': ['count', 'nunique'],
             'timestamp': ['min', 'max'],
             'interaction_channel': lambda x: x.mode()[0] if not x.empty else 'unknown',
             'lead_quality': lambda x: x.mode()[0] if not x.empty else 'unknown',
+            'day_of_week': lambda x: x.mode()[0] if not x.empty else -1 ,
             'contact_consent_given': 'any',
             'interest_level': ['mean', 'max'],
             'duration_minutes': ['sum', 'mean', 'max'],
@@ -67,7 +71,7 @@ class PersistentConversionPredictor:
         # Flatten column names
         user_agg.columns = ['user_id', 'total_interactions', 'interaction_variety',
                            'first_interaction', 'last_interaction', 'primary_channel',
-                           'primary_lead_quality', 'gave_consent', 'avg_interest',
+                           'primary_lead_quality', 'primary_interaction_day', 'gave_consent', 'avg_interest',
                            'max_interest', 'total_duration', 'avg_duration',
                            'max_duration', 'primary_location', 'converted']
         
@@ -158,7 +162,7 @@ class PersistentConversionPredictor:
             'total_duration', 'avg_duration', 'max_duration', 'primary_location',
             'engagement_score', 'interaction_span_days', 'email_consent',
             'sms_consent', 'data_tracking_consent', 'still_consented',
-            'total_communications', 'total_responses', 'response_rate'
+            'total_communications', 'total_responses', 'response_rate', 'primary_interaction_day'
         ]
         
         X = df[feature_columns].copy()
@@ -195,9 +199,26 @@ class PersistentConversionPredictor:
         
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
         
-        # Train Random Forest
-        self.model = RandomForestClassifier(n_estimators=100, random_state=42)
-        self.model.fit(X_train, y_train)
+        # Define the grid of parameters to test
+        param_grid = {
+            'n_estimators': [100, 200, 300],
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.05, 0.1]
+        }
+
+        # Set up GridSearchCV
+        # This will test 18 different combinations of parameters (2 * 3 * 3)
+        grid_search = GridSearchCV(
+            estimator=xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42),
+            param_grid=param_grid,
+            cv=3, n_jobs=-1, verbose=2, scoring='roc_auc'
+        )
+
+        # Fit the grid search to the data
+        grid_search.fit(X_train, y_train)
+
+        # The best model is now stored in grid_search.best_estimator_
+        self.model = grid_search.best_estimator_
         
         # Make predictions
         y_pred = self.model.predict(X_test)
@@ -214,7 +235,7 @@ class PersistentConversionPredictor:
         # Store metadata
         self.model_metadata = {
             'training_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'model_type': 'RandomForestClassifier',
+            'model_type': 'XGBClassifier',
             'accuracy': float(accuracy),
             'auc_score': float(auc_score),
             'n_features': len(self.feature_names),
@@ -418,7 +439,7 @@ class PersistentConversionPredictor:
         detailed_cols = [
             'user_id', 'primary_lead_quality', 'engagement_score',
             'conversion_probability', 'lead_score', 'converted',
-            'primary_channel', 'total_duration', 'total_interactions', 'interaction_variety'
+            'primary_channel', 'total_duration', 'total_interactions', 'interaction_variety', 'primary_interaction_day' 
         ]
         return {
             'summary': scoring_summary,
