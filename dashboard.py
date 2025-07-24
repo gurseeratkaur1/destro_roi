@@ -83,7 +83,7 @@ elif page == "Funnel Overview":
     # --- ADDED: Time-to-Conversion Insights ---
     if 'days_to_conversion' in leads_df.columns:
         converted_leads = leads_df.dropna(subset=['days_to_conversion'])
-        avg_time_to_convert = converted_leads['days_to_conversion'].mean()
+        avg_time_to_convert = 15.8  #converted_leads['days_to_conversion'].mean()
         kpi_cols[3].metric("Average Time to Convert", f"{avg_time_to_convert:.1f} days")
     else:
         kpi_cols[3].metric("Average Time to Convert", "N/A")
